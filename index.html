@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c57">
+  <title>Recebimento Fresh</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #172b3a;
+      background: #f2f6f8;
+      font-size: 17px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: #f2f6f8;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 14px max(16px, calc((100% - 850px) / 2));
+      color: white;
+      background: #123c57;
+      box-shadow: 0 2px 8px #102e4033;
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      max-width: 850px;
+      margin: auto;
+    }
+
+    h1 { margin: 0; font-size: 1.15rem; }
+    main { max-width: 850px; margin: auto; padding: 18px 14px 40px; }
+    section {
+      margin: 0 0 16px;
+      padding: 18px;
+      border: 1px solid #d5e0e6;
+      border-radius: 12px;
+      background: white;
+      box-shadow: 0 1px 3px #102e4010;
+    }
+
+    h2 { margin: 0 0 12px; font-size: 1.08rem; }
+    p { margin: 8px 0; line-height: 1.45; }
+    .muted { color: #526878; font-size: .9rem; }
+    .status-line { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: .9rem; }
+    .pill { font-weight: 700; white-space: nowrap; }
+    .good { color: #b7f4d0; }
+    .warn { color: #ffe49a; }
+    .error { color: #a62222; }
+    .notice {
+      margin: 0 0 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #fff3cf;
+      color: #573d00;
+    }
+    .notice[hidden] { display: none; }
+
+    form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    label { display: grid; align-content: start; gap: 5px; font-weight: 650; }
+    label.full, .form-actions { grid-column: 1 / -1; }
+    input, select {
+      width: 100%;
+      min-height: 54px;
+      padding: 10px 12px;
+      border: 2px solid #9aadb9;
+      border-radius: 8px;
+      color: #172b3a;
+      background: white;
+      font: inherit;
+    }
+
+    button {
+      min-height: 56px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 9px;
+      color: white;
+      background: #075b8d;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button:hover { background: #06486f; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid #f2b705;
+      outline-offset: 2px;
+    }
+
+    button.secondary { color: #123c57; background: #e2edf3; }
+    button.secondary:hover { background: #d3e2eb; }
+    button:disabled { opacity: .65; cursor: wait; }
+    .form-actions, .export-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .form-actions button { flex: 1 1 220px; }
+    .export-actions button { flex: 1 1 180px; }
+    .events { display: grid; gap: 9px; }
+    .event {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 12px;
+      padding: 11px 12px;
+      border: 1px solid #d8e2e8;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    .event-title { font-weight: 750; }
+    .event-meta { color: #526878; font-size: .86rem; }
+    .event-error { grid-column: 1 / -1; color: #a62222; font-size: .9rem; }
+    .retry { grid-column: 1 / -1; justify-self: start; min-height: 46px; }
+    .empty { color: #526878; }
+
+    @media (max-width: 560px) {
+      :root { font-size: 16px; }
+      header { padding: 12px 14px; }
+      main { padding: 12px 10px 28px; }
+      section { padding: 14px; }
+      form { grid-template-columns: 1fr; }
+      label.full, .form-actions { grid-column: auto; }
+      .header-inner { align-items: flex-start; flex-direction: column; }
+      .event { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>Recebimento Fresh</h1>
+      <div class="status-line" aria-live="polite">
+        <span class="pill" id="pending-count">Pendentes: 0</span>
+        <span class="pill good" id="sent-count">Enviados: 0</span>
+        <span class="pill warn" id="error-count">Com erro: 0</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="storage-notice" class="notice" role="status" hidden></div>
+    <div id="network-notice" class="notice" role="status" hidden></div>
+
+    <section aria-labelledby="test-heading">
+      <h2 id="test-heading">Registrar evento de teste</h2>
+      <p class="muted">O evento é salvo neste aparelho antes de qualquer tentativa de envio. Use dados fictícios, como TESTE001.</p>
+      <form id="event-form">
+        <label class="full">
+          Nome do aparelho
+          <input id="device-name" name="deviceName" maxlength="80" autocomplete="off" placeholder="Ex.: Celular do recebimento">
+        </label>
+        <label>
+          Crachá de teste
+          <input id="badge" name="badge" maxlength="80" autocomplete="off" value="TESTE001">
+        </label>
+        <label>
+          Atividade
+          <select id="activity" name="activity" required>
+            <option>SESSAO_INICIO</option>
+            <option>DOCA_INICIO</option>
+            <option>PESSOAS</option>
+            <option>COMPRAS_ENVIADO</option>
+            <option>COMPRAS_RESPONDEU</option>
+            <option>SAIDA_DOCA</option>
+            <option>CAMARA_CHEGADA</option>
+            <option>PEDIDO_ENTREGUE</option>
+            <option>SISTEMA_CAIU_INICIO</option>
+            <option>SISTEMA_CAIU_FIM</option>
+            <option>DESFAZER</option>
+          </select>
+        </label>
+        <label>
+          Pedido
+          <input id="order" name="order" maxlength="100" autocomplete="off">
+        </label>
+        <label>
+          Doca
+          <select id="dock" name="dock">
+            <option value="">Não informada</option>
+            <option>D1</option>
+            <option>D2</option>
+            <option>D3</option>
+          </select>
+        </label>
+        <label>
+          Categoria
+          <select id="category" name="category">
+            <option value="">Não informada</option>
+            <option>Carne</option>
+            <option>Iogurte</option>
+            <option>Congelado</option>
+            <option>FLV</option>
+          </select>
+        </label>
+        <label>
+          Número de pessoas
+          <select id="people" name="people">
+            <option value="">Não informado</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3+</option>
+          </select>
+        </label>
+        <label>
+          Crachá de apoio
+          <input id="support-badge" name="supportBadge" maxlength="80" autocomplete="off">
+        </label>
+        <label>
+          Detalhe
+          <input id="detail" name="detail" maxlength="250" autocomplete="off">
+        </label>
+        <label>
+          Fonte
+          <select id="source" name="source">
+            <option value="toque">Toque</option>
+            <option value="manual">Manual</option>
+            <option value="qr">QR</option>
+          </select>
+        </label>
+        <div class="form-actions">
+          <button id="create-button" type="submit">Salvar evento</button>
+          <button id="sync-button" class="secondary" type="button">Sincronizar agora</button>
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="export-heading">
+      <h2 id="export-heading">Sincronização</h2>
+      <p class="muted">Eventos pendentes são enviados em ordem. Se a resposta do servidor não puder ser lida, o evento permanece pendente e será reenviado com o mesmo identificador.</p>
+      <div class="export-actions">
+        <button id="export-csv" class="secondary" type="button">Exportar CSV</button>
+        <button id="copy-json" class="secondary" type="button">Copiar JSON</button>
+      </div>
+      <div id="duplicate-test-actions" hidden>
+        <button id="retry-last-sent-button" class="secondary" type="button">Reenviar último enviado</button>
+        <p id="duplicate-test-message" class="muted" role="status" aria-live="polite" hidden></p>
+      </div>
+      <p id="action-message" class="muted" role="status" aria-live="polite"></p>
+    </section>
+
+    <section aria-labelledby="events-heading">
+      <h2 id="events-heading">Eventos neste aparelho</h2>
+      <div id="event-list" class="events" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    'use strict';
+
+    const ENDPOINT_URL = 'https://script.google.com/a/macros/shopper.com.br/s/AKfycbxLMmUs9pUvRnRJ5zkkHDQA7r-yzHN2XxhO3oQOitkuvTe7MSjYIl5HUHMwv8f3npleNg/exec';
+    const TOKEN = '7b4f5b97cc7640fe9161700dd7247f542496d2b530b54d93a6777592c38d5534';
+    const DOCAS = ['D1', 'D2', 'D3'];
+    const CAMARAS = ['CAM-01', 'CAM-02', 'CAM-03'];
+    const CATEGORIAS = ['Carne', 'Iogurte', 'Congelado', 'FLV'];
+    const ATIVIDADES = [
+      'SESSAO_INICIO', 'DOCA_INICIO', 'PESSOAS', 'COMPRAS_ENVIADO',
+      'COMPRAS_RESPONDEU', 'SAIDA_DOCA', 'CAMARA_CHEGADA',
+      'PEDIDO_ENTREGUE', 'SISTEMA_CAIU_INICIO', 'SISTEMA_CAIU_FIM',
+      'DESFAZER'
+    ];
+    const CAMPOS_CSV = [
+      'event_id', 'ts_aparelho', 'recebido_em', 'pedido', 'doca',
+      'categoria', 'atividade', 'cracha', 'cracha_apoio', 'n_pessoas',
+      'detalhe', 'fonte', 'aparelho_id', 'offline', 'ref_event_id'
+    ];
+    const DB_NAME = 'recebimento-fresh';
+    const DB_VERSION = 1;
+    const CONFIG_KEY = 'recebimento-fresh-config';
+    const RETRY_DELAYS = [5000, 15000, 60000, 300000];
+    const REQUEST_TIMEOUT_MS = 15000;
+    const CSV_FORMULA_FIELDS = new Set([
+      'pedido', 'detalhe', 'cracha', 'cracha_apoio', 'aparelho_id'
+    ]);
+
+    const state = {
+      db: null,
+      storageMode: 'indexedDB',
+      syncInProgress: false,
+      syncTimer: null
+    };
+
+    const elements = {
+      form: document.getElementById('event-form'),
+      deviceName: document.getElementById('device-name'),
+      badge: document.getElementById('badge'),
+      activity: document.getElementById('activity'),
+      order: document.getElementById('order'),
+      dock: document.getElementById('dock'),
+      category: document.getElementById('category'),
+      people: document.getElementById('people'),
+      supportBadge: document.getElementById('support-badge'),
+      detail: document.getElementById('detail'),
+      source: document.getElementById('source'),
+      createButton: document.getElementById('create-button'),
+      syncButton: document.getElementById('sync-button'),
+      eventList: document.getElementById('event-list'),
+      pendingCount: document.getElementById('pending-count'),
+      sentCount: document.getElementById('sent-count'),
+      errorCount: document.getElementById('error-count'),
+      actionMessage: document.getElementById('action-message'),
+      exportHeading: document.getElementById('export-heading'),
+      duplicateTestActions: document.getElementById('duplicate-test-actions'),
+      retryLastSentButton: document.getElementById('retry-last-sent-button'),
+      duplicateTestMessage: document.getElementById('duplicate-test-message'),
+      networkNotice: document.getElementById('network-notice'),
+      storageNotice: document.getElementById('storage-notice')
+    };
+
+    function showMessage(message, isError) {
+      elements.actionMessage.textContent = message;
+      elements.actionMessage.className = isError ? 'error' : 'muted';
+    }
+
+    function showNetworkNotice(message) {
+      elements.networkNotice.textContent = message;
+      elements.networkNotice.hidden = !message;
+    }
+
+    function localIsoTimestamp(date) {
+      const pad = (value, size) => String(value).padStart(size, '0');
+      const offset = -date.getTimezoneOffset();
+      const sign = offset >= 0 ? '+' : '-';
+      const absoluteOffset = Math.abs(offset);
+      return date.getFullYear() + '-' +
+        pad(date.getMonth() + 1, 2) + '-' +
+        pad(date.getDate(), 2) + 'T' +
+        pad(date.getHours(), 2) + ':' +
+        pad(date.getMinutes(), 2) + ':' +
+        pad(date.getSeconds(), 2) + '.' +
+        pad(date.getMilliseconds(), 3) + sign +
+        pad(Math.floor(absoluteOffset / 60), 2) + ':' +
+        pad(absoluteOffset % 60, 2);
+    }
+
+    function newEventId() {
+      if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID();
+      }
+
+      if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+        const values = new Uint8Array(16);
+        globalThis.crypto.getRandomValues(values);
+        values[6] = (values[6] & 0x0f) | 0x40;
+        values[8] = (values[8] & 0x3f) | 0x80;
+        const hex = Array.from(values, value => value.toString(16).padStart(2, '0'));
+        return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+      }
+
+      return 'evt_' + Date.now().toString(36) + '_' +
+        Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    }
+
+    function readConfig() {
+      try {
+        const config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+        elements.deviceName.value = typeof config.deviceName === 'string' ? config.deviceName : '';
+      } catch (error) {
+        showMessage('Não foi possível ler as configurações locais do aparelho.', true);
+      }
+    }
+
+    function populateConfiguredOptions(select, values) {
+      while (select.options.length > 1) select.remove(1);
+      for (const value of values) {
+        select.add(new Option(value, value));
+      }
+    }
+
+    function saveConfig() {
+      try {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({
+          deviceName: elements.deviceName.value.trim()
+        }));
+        return true;
+      } catch (error) {
+        showMessage('Não foi possível salvar o nome do aparelho neste navegador.', true);
+        return false;
+      }
+    }
+
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) {
+          reject(new Error('IndexedDB indisponível'));
+          return;
+        }
+
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains('events')) {
+            const store = database.createObjectStore('events', { keyPath: 'event_id' });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+            store.createIndex('status', 'status', { unique: false });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('Falha ao abrir IndexedDB'));
+        request.onblocked = () => reject(new Error('IndexedDB está bloqueado por outra guia'));
+      });
+    }
+
+    function fallbackReadAll() {
+      try {
+        return JSON.parse(localStorage.getItem('recebimento-fresh-events') || '[]');
+      } catch (error) {
+        throw new Error('Os dados locais do navegador não puderam ser lidos.');
+      }
+    }
+
+    function fallbackWriteAll(events) {
+      try {
+        localStorage.setItem('recebimento-fresh-events', JSON.stringify(events));
+      } catch (error) {
+        throw new Error('O armazenamento local está cheio ou indisponível.');
+      }
+    }
+
+    const Store = {
+      async all() {
+        if (state.storageMode === 'localStorage') return fallbackReadAll();
+        return new Promise((resolve, reject) => {
+          const transaction = state.db.transaction('events', 'readonly');
+          const request = transaction.objectStore('events').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error || new Error('Falha ao ler eventos'));
+          transaction.onabort = () => reject(transaction.error || new Error('Falha ao ler eventos'));
+        });
+      },
+
+      async add(event) {
+        if (state.storageMode === 'localStorage') {
+          const events = fallbackReadAll();
+          if (events.some(item => item.event_id === event.event_id)) return false;
+          events.push(event);
+          fallbackWriteAll(events);
+          return true;
+        }
+
+        return new Promise((resolve, reject) => {
+          const transaction = state.db.transaction('events', 'readwrite');
+          const request = transaction.objectStore('events').add(event);
+          request.onerror = () => {
+            if (request.error && request.error.name === 'ConstraintError') {
+              transaction.abort();
+              resolve(false);
+            } else {
+              reject(request.error || new Error('Falha ao salvar evento'));
+            }
+          };
+          transaction.oncomplete = () => resolve(true);
+          transaction.onabort = () => {
+            if (request.error && request.error.name !== 'ConstraintError') {
+              reject(request.error);
+            }
+          };
+          transaction.onerror = () => reject(transaction.error || new Error('Falha ao salvar evento'));
+        });
+      },
+
+      async put(event) {
+        if (state.storageMode === 'localStorage') {
+          const events = fallbackReadAll();
+          const index = events.findIndex(item => item.event_id === event.event_id);
+          if (index < 0) throw new Error('Evento local não encontrado.');
+          events[index] = event;
+          fallbackWriteAll(events);
+          return;
+        }
+
+        return new Promise((resolve, reject) => {
+          const transaction = state.db.transaction('events', 'readwrite');
+          transaction.objectStore('events').put(event);
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error || new Error('Falha ao atualizar evento'));
+          transaction.onabort = () => reject(transaction.error || new Error('Falha ao atualizar evento'));
+        });
+      },
+
+      async get(eventId) {
+        if (state.storageMode === 'localStorage') {
+          return fallbackReadAll().find(item => item.event_id === eventId) || null;
+        }
+        return new Promise((resolve, reject) => {
+          const transaction = state.db.transaction('events', 'readonly');
+          const request = transaction.objectStore('events').get(eventId);
+          request.onsuccess = () => resolve(request.result || null);
+          request.onerror = () => reject(request.error || new Error('Falha ao localizar evento'));
+        });
+      }
+    };
+
+    async function initializeStorage() {
+      try {
+        state.db = await openDatabase();
+        state.db.onversionchange = () => state.db.close();
+      } catch (error) {
+        state.storageMode = 'localStorage';
+        elements.storageNotice.hidden = false;
+        elements.storageNotice.textContent =
+          'IndexedDB não está disponível. O app está usando armazenamento alternativo do navegador; a persistência pode ser mais limitada.';
+      }
+    }
+
+    function eventPayload(event) {
+      return {
+        token: TOKEN,
+        event_id: event.event_id,
+        ts_aparelho: event.ts_aparelho,
+        pedido: event.pedido,
+        doca: event.doca,
+        categoria: event.categoria,
+        atividade: event.atividade,
+        cracha: event.cracha,
+        cracha_apoio: event.cracha_apoio,
+        n_pessoas: event.n_pessoas,
+        detalhe: event.detalhe,
+        fonte: event.fonte,
+        aparelho_id: event.aparelho_id,
+        offline: event.offline,
+        ref_event_id: event.ref_event_id
+      };
+    }
+
+    async function updateEvent(event, patch) {
+      const updated = { ...event, ...patch };
+      await Store.put(updated);
+      return updated;
+    }
+
+    function retryDelay(attempts) {
+      return RETRY_DELAYS[Math.min(Math.max(attempts - 1, 0), RETRY_DELAYS.length - 1)];
+    }
+
+    async function sendEvent(event) {
+      const age = Date.now() - Date.parse(event.ts_aparelho);
+      if (age > 30000 && !event.offline) {
+        event = await updateEvent(event, { offline: true });
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(ENDPOINT_URL, {
+          method: 'POST',
+          body: JSON.stringify(eventPayload(event)),
+          signal: controller.signal
+        });
+        if (response.type === 'opaque' || response.status === 0) {
+          throw new Error('Resposta do servidor bloqueada ou ilegível');
+        }
+        const body = await response.text();
+        let result;
+        try {
+          result = JSON.parse(body);
+        } catch (error) {
+          throw new Error('Resposta do servidor ilegível');
+        }
+
+        if (result && result.ok === true) {
+          await updateEvent(event, {
+            status: 'enviado',
+            attempts: event.attempts + 1,
+            lastError: '',
+            nextAttemptAt: 0,
+            sentAt: Date.now()
+          });
+          return 'enviado';
+        }
+
+        const reason = result && typeof result.erro === 'string' ? result.erro : 'resposta inválida';
+        await updateEvent(event, {
+          status: 'erro',
+          attempts: event.attempts + 1,
+          lastError: reason,
+          nextAttemptAt: 0
+        });
+        return 'erro';
+      } catch (error) {
+        const attempts = event.attempts + 1;
+        await updateEvent(event, {
+          status: 'pendente',
+          offline: true,
+          attempts,
+          lastError: error.name === 'AbortError' ? 'Tempo de resposta excedido' : 'Falha de rede ou resposta ilegível',
+          nextAttemptAt: Date.now() + retryDelay(attempts)
+        });
+        return 'pendente';
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    async function syncQueue(force) {
+      if (state.syncInProgress) return;
+      if (!navigator.onLine) {
+        showNetworkNotice('Sem conexão. Os eventos permanecem salvos neste aparelho.');
+        return;
+      }
+
+      state.syncInProgress = true;
+      elements.syncButton.disabled = true;
+      showNetworkNotice('');
+      try {
+        const events = (await Store.all())
+          .filter(event => event.status === 'pendente')
+          .sort((a, b) => a.createdAt - b.createdAt);
+
+        for (const event of events) {
+          if (!force && event.nextAttemptAt > Date.now()) break;
+          if (!navigator.onLine) {
+            showNetworkNotice('Conexão interrompida. Os eventos continuam salvos e serão reenviados.');
+            break;
+          }
+          await sendEvent(event);
+          await render();
+        }
+      } catch (error) {
+        showMessage(error.message || 'Falha ao acessar os eventos locais.', true);
+      } finally {
+        state.syncInProgress = false;
+        elements.syncButton.disabled = false;
+        await render();
+        scheduleRetry();
+      }
+    }
+
+    function scheduleRetry() {
+      clearTimeout(state.syncTimer);
+      if (!navigator.onLine) return;
+      Store.all().then(events => {
+        const next = events
+          .filter(event => event.status === 'pendente')
+          .map(event => event.nextAttemptAt || 0)
+          .sort((a, b) => a - b)[0];
+        if (next === undefined) return;
+        state.syncTimer = setTimeout(() => syncQueue(false), Math.max(1000, next - Date.now()));
+      }).catch(() => {
+        showMessage('Não foi possível agendar a sincronização dos eventos.', true);
+      });
+    }
+
+    function csvCell(value, field) {
+      let text = value === null || value === undefined ? '' : String(value);
+      if (CSV_FORMULA_FIELDS.has(field) && /^[=+\-@\t]/.test(text)) {
+        text = "'" + text;
+      }
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    async function exportCsv() {
+      try {
+        const events = (await Store.all()).sort((a, b) => a.createdAt - b.createdAt);
+        const lines = [
+          CAMPOS_CSV.map(csvCell).join(','),
+          ...events.map(event => CAMPOS_CSV.map(field =>
+            csvCell(field === 'recebido_em' ? '' : event[field] ?? '', field)
+          ).join(','))
+        ];
+        const blob = new Blob(['\uFEFF' + lines.join('\r\n')], {
+          type: 'text/csv;charset=utf-8'
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'eventos-recebimento-fresh.csv';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showMessage(`${events.length} evento(s) exportado(s) para CSV.`, false);
+      } catch (error) {
+        showMessage(error.message || 'Não foi possível exportar o CSV.', true);
+      }
+    }
+
+    async function copyJson() {
+      try {
+        const events = (await Store.all()).sort((a, b) => a.createdAt - b.createdAt);
+        const data = events.map(event => ({
+          event_id: event.event_id,
+          ts_aparelho: event.ts_aparelho,
+          recebido_em: '',
+          pedido: event.pedido,
+          doca: event.doca,
+          categoria: event.categoria,
+          atividade: event.atividade,
+          cracha: event.cracha,
+          cracha_apoio: event.cracha_apoio,
+          n_pessoas: event.n_pessoas,
+          detalhe: event.detalhe,
+          fonte: event.fonte,
+          aparelho_id: event.aparelho_id,
+          offline: event.offline,
+          ref_event_id: event.ref_event_id,
+          status: event.status,
+          tentativas: event.attempts,
+          ultimo_erro: event.lastError
+        }));
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+          throw new Error('A cópia não está disponível neste navegador. Use Exportar CSV.');
+        }
+        await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+        showMessage(`${events.length} evento(s) copiado(s) como JSON.`, false);
+      } catch (error) {
+        showMessage(error.message || 'Não foi possível copiar o JSON.', true);
+      }
+    }
+
+    function statusLabel(status) {
+      if (status === 'enviado') return 'Enviado';
+      if (status === 'erro') return 'Erro permanente';
+      return 'Pendente';
+    }
+
+    async function retryPermanentlyFailed(eventId) {
+      try {
+        const event = await Store.get(eventId);
+        if (!event || event.status !== 'erro') return;
+        await updateEvent(event, {
+          status: 'pendente',
+          nextAttemptAt: 0,
+          lastError: ''
+        });
+        await render();
+        await syncQueue(true);
+      } catch (error) {
+        showMessage(error.message || 'Não foi possível tentar novamente.', true);
+      }
+    }
+
+    async function resendLastSentEvent() {
+      elements.retryLastSentButton.disabled = true;
+      elements.duplicateTestMessage.hidden = false;
+      elements.duplicateTestMessage.textContent = 'Enviando evento de teste...';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const events = await Store.all();
+        const event = events
+          .filter(item => item.status === 'enviado')
+          .sort((a, b) => b.createdAt - a.createdAt)[0];
+        if (!event) throw new Error('Não há evento enviado para reenviar.');
+
+        const response = await fetch(ENDPOINT_URL, {
+          method: 'POST',
+          body: JSON.stringify(eventPayload(event)),
+          signal: controller.signal
+        });
+        const rawBody = await response.text();
+        elements.duplicateTestMessage.textContent =
+          `HTTP ${response.status}: ${rawBody || '(resposta vazia)'}`;
+      } catch (error) {
+        elements.duplicateTestMessage.textContent =
+          error.name === 'AbortError'
+            ? 'Falha no reenvio de teste: tempo de resposta excedido.'
+            : `Falha no reenvio de teste: ${error.message || 'erro de rede'}`;
+      } finally {
+        clearTimeout(timeout);
+        elements.retryLastSentButton.disabled = false;
+      }
+    }
+
+    async function render() {
+      const events = (await Store.all()).sort((a, b) => b.createdAt - a.createdAt);
+      const counts = events.reduce((result, event) => {
+        result[event.status] = (result[event.status] || 0) + 1;
+        return result;
+      }, {});
+      elements.pendingCount.textContent = `Pendentes: ${counts.pendente || 0}`;
+      elements.sentCount.textContent = `Enviados: ${counts.enviado || 0}`;
+      elements.errorCount.textContent = `Com erro: ${counts.erro || 0}`;
+      elements.eventList.replaceChildren();
+
+      if (!events.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'Nenhum evento registrado neste aparelho.';
+        elements.eventList.append(empty);
+        return;
+      }
+
+      for (const event of events) {
+        const card = document.createElement('article');
+        card.className = 'event';
+        const title = document.createElement('div');
+        title.className = 'event-title';
+        title.textContent = `${event.atividade} — ${statusLabel(event.status)}`;
+        const time = document.createElement('div');
+        time.className = 'event-meta';
+        time.textContent = event.ts_aparelho;
+        const info = document.createElement('div');
+        info.className = 'event-meta';
+        info.textContent = [
+          event.pedido && `Pedido ${event.pedido}`,
+          event.doca && `Doca ${event.doca}`,
+          event.cracha && `Crachá ${event.cracha}`,
+          event.offline && 'Offline'
+        ].filter(Boolean).join(' · ');
+        card.append(title, time);
+        if (info.textContent) card.append(info);
+        if (event.status === 'erro') {
+          const reason = document.createElement('div');
+          reason.className = 'event-error';
+          reason.textContent = `Erro permanente: ${event.lastError || 'motivo não informado'}`;
+          const retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'secondary retry';
+          retry.textContent = 'Tentar novamente';
+          retry.addEventListener('click', () => retryPermanentlyFailed(event.event_id));
+          card.append(reason, retry);
+        } else if (event.status === 'pendente' && event.lastError) {
+          const reason = document.createElement('div');
+          reason.className = 'event-meta';
+          reason.textContent = `Última tentativa: ${event.lastError}`;
+          card.append(reason);
+        }
+        elements.eventList.append(card);
+      }
+    }
+
+    elements.form.addEventListener('submit', async event => {
+      event.preventDefault();
+      elements.createButton.disabled = true;
+      try {
+        const now = new Date();
+        const deviceName = elements.deviceName.value.trim();
+        if (!deviceName) {
+          elements.deviceName.focus();
+          showMessage('Informe o nome deste aparelho para identificar os eventos.', true);
+          return;
+        }
+        saveConfig();
+        const existingEvents = await Store.all();
+        const lastCreatedAt = existingEvents.reduce(
+          (latest, item) => Math.max(latest, Number(item.createdAt) || 0),
+          0
+        );
+        const createdAt = Math.max(Date.now(), lastCreatedAt + 1);
+        const record = {
+          event_id: newEventId(),
+          ts_aparelho: localIsoTimestamp(now),
+          pedido: elements.order.value.trim(),
+          doca: elements.dock.value,
+          categoria: elements.category.value,
+          atividade: elements.activity.value,
+          cracha: elements.badge.value.trim(),
+          cracha_apoio: elements.supportBadge.value.trim(),
+          n_pessoas: elements.people.value,
+          detalhe: elements.detail.value.trim(),
+          fonte: elements.source.value,
+          aparelho_id: deviceName,
+          offline: !navigator.onLine,
+          ref_event_id: '',
+          status: 'pendente',
+          attempts: 0,
+          lastError: '',
+          createdAt,
+          nextAttemptAt: 0
+        };
+
+        const added = await Store.add(record);
+        if (!added) throw new Error('Este identificador já existe no armazenamento local.');
+        elements.detail.value = '';
+        showMessage('Evento salvo localmente. A sincronização foi iniciada.', false);
+        await render();
+        void syncQueue(false);
+      } catch (error) {
+        showMessage(error.message || 'Não foi possível salvar o evento localmente.', true);
+      } finally {
+        elements.createButton.disabled = false;
+      }
+    });
+
+    elements.syncButton.addEventListener('click', () => syncQueue(true));
+    document.getElementById('export-csv').addEventListener('click', exportCsv);
+    document.getElementById('copy-json').addEventListener('click', copyJson);
+    elements.retryLastSentButton.addEventListener('click', resendLastSentEvent);
+
+    let syncHeadingTapCount = 0;
+    elements.exportHeading.addEventListener('click', () => {
+      syncHeadingTapCount += 1;
+      if (syncHeadingTapCount >= 5) {
+        elements.duplicateTestActions.hidden = false;
+      }
+    });
+
+    window.addEventListener('online', () => {
+      showNetworkNotice('');
+      void syncQueue(false);
+    });
+    window.addEventListener('offline', () => {
+      showNetworkNotice('Sem conexão. Os eventos permanecem salvos neste aparelho.');
+    });
+
+    async function startApp() {
+      readConfig();
+      populateConfiguredOptions(elements.dock, DOCAS);
+      populateConfiguredOptions(elements.category, CATEGORIAS);
+      await initializeStorage();
+      try {
+        await render();
+        if (!navigator.onLine) {
+          showNetworkNotice('Sem conexão. Os eventos permanecem salvos neste aparelho.');
+        } else {
+          void syncQueue(false);
+        }
+      } catch (error) {
+        showMessage(error.message || 'Falha ao carregar os eventos locais.', true);
+      }
+      setInterval(() => syncQueue(false), 30000);
+      scheduleRetry();
+    }
+
+    void startApp();
+  </script>
+</body>
+</html>
