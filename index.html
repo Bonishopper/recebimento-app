@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#123c57">
   <title>Recebimento Fresh</title>
+  <link rel="manifest" href="./manifest.json">
   <style>
     :root {
       color-scheme: light;
@@ -59,6 +60,7 @@
     .pill { font-weight: 700; white-space: nowrap; }
     .good { color: #b7f4d0; }
     .warn { color: #ffe49a; }
+    .offline-ready { color: #b7f4d0; font-size: .82rem; font-weight: 700; white-space: nowrap; }
     .error { color: #a62222; }
     .notice {
       margin: 0 0 16px;
@@ -68,6 +70,19 @@
       color: #573d00;
     }
     .notice[hidden] { display: none; }
+    label[hidden] { display: none; }
+    .field-notice { min-height: 1.4em; color: #a62222; font-size: .9rem; font-weight: 650; }
+    .operator-heading { display: grid; gap: 8px; }
+    .operator-heading p { margin: 0; font-size: 1.15rem; font-weight: 750; }
+    .text-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 56px;
+      color: #075b8d;
+      font-weight: 750;
+      text-decoration: underline;
+      cursor: pointer;
+    }
 
     form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     label { display: grid; align-content: start; gap: 5px; font-weight: 650; }
@@ -141,6 +156,7 @@
     <div class="header-inner">
       <h1>Recebimento Fresh</h1>
       <div class="status-line" aria-live="polite">
+        <span class="offline-ready" id="offline-ready" hidden>Offline pronto</span>
         <span class="pill" id="pending-count">Pendentes: 0</span>
         <span class="pill good" id="sent-count">Enviados: 0</span>
         <span class="pill warn" id="error-count">Com erro: 0</span>
@@ -152,9 +168,37 @@
     <div id="storage-notice" class="notice" role="status" hidden></div>
     <div id="network-notice" class="notice" role="status" hidden></div>
 
-    <section aria-labelledby="test-heading">
-      <h2 id="test-heading">Registrar evento de teste</h2>
+    <section id="start-screen" aria-labelledby="start-heading" hidden>
+      <h2 id="start-heading">Início de turno</h2>
+      <form id="start-form" novalidate>
+        <label class="full">
+          Crachá
+          <input id="session-badge" name="badge" maxlength="80" autocomplete="off" required>
+          <span id="badge-notice" class="field-notice" aria-live="polite"></span>
+        </label>
+        <label id="device-name-field" class="full">
+          Nome do aparelho
+          <input id="session-device-name" name="deviceName" maxlength="80" autocomplete="off" placeholder="Ex.: Celular do recebimento">
+          <span id="device-name-notice" class="field-notice" aria-live="polite"></span>
+        </label>
+        <div class="form-actions">
+          <button id="start-shift-button" type="submit">Iniciar turno</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="turn-screen" aria-labelledby="turn-heading" hidden>
+      <div class="operator-heading">
+        <h2 id="turn-heading">Turno ativo</h2>
+        <p id="operator-summary"></p>
+        <a id="change-operator" class="text-link" href="#">Trocar operador</a>
+      </div>
+    </section>
+
+    <section id="diagnostic-screen" aria-labelledby="test-heading" hidden>
+      <h2 id="test-heading">Diagnóstico</h2>
       <p class="muted">O evento é salvo neste aparelho antes de qualquer tentativa de envio. Use dados fictícios, como TESTE001.</p>
+      <button id="diagnostic-back-button" class="secondary" type="button">Voltar</button>
       <form id="event-form">
         <label class="full">
           Nome do aparelho
@@ -235,7 +279,7 @@
       </form>
     </section>
 
-    <section aria-labelledby="export-heading">
+    <section id="sync-screen" aria-labelledby="export-heading" hidden>
       <h2 id="export-heading">Sincronização</h2>
       <p class="muted">Eventos pendentes são enviados em ordem. Se a resposta do servidor não puder ser lida, o evento permanece pendente e será reenviado com o mesmo identificador.</p>
       <div class="export-actions">
@@ -249,7 +293,7 @@
       <p id="action-message" class="muted" role="status" aria-live="polite"></p>
     </section>
 
-    <section aria-labelledby="events-heading">
+    <section id="events-screen" aria-labelledby="events-heading" hidden>
       <h2 id="events-heading">Eventos neste aparelho</h2>
       <div id="event-list" class="events" aria-live="polite"></div>
     </section>
@@ -258,8 +302,8 @@
   <script>
     'use strict';
 
-    const ENDPOINT_URL = 'https://script.google.com/a/macros/shopper.com.br/s/AKfycbxLMmUs9pUvRnRJ5zkkHDQA7r-yzHN2XxhO3oQOitkuvTe7MSjYIl5HUHMwv8f3npleNg/exec';
-    const TOKEN = '7b4f5b97cc7640fe9161700dd7247f542496d2b530b54d93a6777592c38d5534';
+    const ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbw79xdEqw6DXKh7Z-k3q6DBwKSjNTkPuk-UWHavlQ2d1zcg11K_7oj8x8b2dF-WM8HPwA/exec';
+    const TOKEN = '4d14db4eeac045e5bd731cc0b3faab99926e4a413f384be8ba0c55cb220ba3e1';
     const DOCAS = ['D1', 'D2', 'D3'];
     const CAMARAS = ['CAM-01', 'CAM-02', 'CAM-03'];
     const CATEGORIAS = ['Carne', 'Iogurte', 'Congelado', 'FLV'];
@@ -277,6 +321,7 @@
     const DB_NAME = 'recebimento-fresh';
     const DB_VERSION = 1;
     const CONFIG_KEY = 'recebimento-fresh-config';
+    const SESSION_KEY = 'recebimento-fresh-session';
     const RETRY_DELAYS = [5000, 15000, 60000, 300000];
     const REQUEST_TIMEOUT_MS = 15000;
     const CSV_FORMULA_FIELDS = new Set([
@@ -287,10 +332,27 @@
       db: null,
       storageMode: 'indexedDB',
       syncInProgress: false,
+      syncRequested: false,
       syncTimer: null
     };
 
     const elements = {
+      startForm: document.getElementById('start-form'),
+      startScreen: document.getElementById('start-screen'),
+      turnScreen: document.getElementById('turn-screen'),
+      diagnosticScreen: document.getElementById('diagnostic-screen'),
+      syncScreen: document.getElementById('sync-screen'),
+      eventsScreen: document.getElementById('events-screen'),
+      sessionBadge: document.getElementById('session-badge'),
+      sessionDeviceName: document.getElementById('session-device-name'),
+      deviceNameField: document.getElementById('device-name-field'),
+      badgeNotice: document.getElementById('badge-notice'),
+      deviceNameNotice: document.getElementById('device-name-notice'),
+      startShiftButton: document.getElementById('start-shift-button'),
+      operatorSummary: document.getElementById('operator-summary'),
+      changeOperator: document.getElementById('change-operator'),
+      diagnosticBackButton: document.getElementById('diagnostic-back-button'),
+      appTitle: document.querySelector('header h1'),
       form: document.getElementById('event-form'),
       deviceName: document.getElementById('device-name'),
       badge: document.getElementById('badge'),
@@ -314,7 +376,15 @@
       retryLastSentButton: document.getElementById('retry-last-sent-button'),
       duplicateTestMessage: document.getElementById('duplicate-test-message'),
       networkNotice: document.getElementById('network-notice'),
-      storageNotice: document.getElementById('storage-notice')
+      storageNotice: document.getElementById('storage-notice'),
+      offlineReady: document.getElementById('offline-ready')
+    };
+
+    const sessionState = {
+      cracha: '',
+      aparelho_id: '',
+      turno_ativo: false,
+      ts_inicio: ''
     };
 
     function showMessage(message, isError) {
@@ -387,6 +457,43 @@
         showMessage('Não foi possível salvar o nome do aparelho neste navegador.', true);
         return false;
       }
+    }
+
+    function loadSession() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+        sessionState.cracha = typeof saved.cracha === 'string' ? saved.cracha : '';
+        sessionState.aparelho_id = typeof saved.aparelho_id === 'string' ? saved.aparelho_id : '';
+        sessionState.turno_ativo = saved.turno_ativo === true;
+        sessionState.ts_inicio = typeof saved.ts_inicio === 'string' ? saved.ts_inicio : '';
+      } catch (error) {
+        showMessage('Não foi possível ler a sessão salva neste aparelho.', true);
+      }
+    }
+
+    function saveSession() {
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sessionState));
+        return true;
+      } catch (error) {
+        showMessage('Não foi possível salvar a sessão neste aparelho.', true);
+        return false;
+      }
+    }
+
+    function showScreen(screen) {
+      const onTurnScreen = screen === 'turn';
+      elements.startScreen.hidden = screen !== 'start';
+      elements.turnScreen.hidden = !onTurnScreen;
+      elements.diagnosticScreen.hidden = screen !== 'diagnostic';
+      elements.syncScreen.hidden = !onTurnScreen;
+      elements.eventsScreen.hidden = !onTurnScreen;
+    }
+
+    function showSessionScreen() {
+      elements.operatorSummary.textContent =
+        `Operador: ${sessionState.cracha} · Aparelho: ${sessionState.aparelho_id}`;
+      showScreen(sessionState.turno_ativo ? 'turn' : 'start');
     }
 
     function openDatabase() {
@@ -539,6 +646,40 @@
       return updated;
     }
 
+    async function createLocalEvent(fields, now) {
+      const existingEvents = await Store.all();
+      const lastCreatedAt = existingEvents.reduce(
+        (latest, item) => Math.max(latest, Number(item.createdAt) || 0),
+        0
+      );
+      const record = {
+        event_id: newEventId(),
+        ts_aparelho: localIsoTimestamp(now),
+        pedido: fields.pedido || '',
+        doca: fields.doca || '',
+        categoria: fields.categoria || '',
+        atividade: fields.atividade,
+        cracha: fields.cracha || '',
+        cracha_apoio: fields.cracha_apoio || '',
+        n_pessoas: fields.n_pessoas || '',
+        detalhe: fields.detalhe || '',
+        fonte: fields.fonte || 'toque',
+        aparelho_id: fields.aparelho_id || '',
+        offline: !navigator.onLine,
+        ref_event_id: fields.ref_event_id || '',
+        status: 'pendente',
+        attempts: 0,
+        lastError: '',
+        createdAt: Math.max(Date.now(), lastCreatedAt + 1),
+        nextAttemptAt: 0
+      };
+
+      const added = await Store.add(record);
+      if (!added) throw new Error('Este identificador já existe no armazenamento local.');
+      await render();
+      return record;
+    }
+
     function retryDelay(attempts) {
       return RETRY_DELAYS[Math.min(Math.max(attempts - 1, 0), RETRY_DELAYS.length - 1)];
     }
@@ -602,8 +743,11 @@
       }
     }
 
-    async function syncQueue(force) {
-      if (state.syncInProgress) return;
+    async function syncQueue(respectBackoff = false) {
+      if (state.syncInProgress) {
+        if (!respectBackoff) state.syncRequested = true;
+        return;
+      }
       if (!navigator.onLine) {
         showNetworkNotice('Sem conexão. Os eventos permanecem salvos neste aparelho.');
         return;
@@ -618,13 +762,14 @@
           .sort((a, b) => a.createdAt - b.createdAt);
 
         for (const event of events) {
-          if (!force && event.nextAttemptAt > Date.now()) break;
+          if (respectBackoff && event.nextAttemptAt > Date.now()) break;
           if (!navigator.onLine) {
             showNetworkNotice('Conexão interrompida. Os eventos continuam salvos e serão reenviados.');
             break;
           }
-          await sendEvent(event);
+          const result = await sendEvent(event);
           await render();
+          if (result === 'pendente') break;
         }
       } catch (error) {
         showMessage(error.message || 'Falha ao acessar os eventos locais.', true);
@@ -632,7 +777,13 @@
         state.syncInProgress = false;
         elements.syncButton.disabled = false;
         await render();
-        scheduleRetry();
+        if (state.syncRequested && navigator.onLine) {
+          state.syncRequested = false;
+          void syncQueue();
+        } else {
+          state.syncRequested = false;
+          scheduleRetry();
+        }
       }
     }
 
@@ -645,7 +796,7 @@
           .map(event => event.nextAttemptAt || 0)
           .sort((a, b) => a - b)[0];
         if (next === undefined) return;
-        state.syncTimer = setTimeout(() => syncQueue(false), Math.max(1000, next - Date.now()));
+        state.syncTimer = setTimeout(() => syncQueue(true), Math.max(1000, next - Date.now()));
       }).catch(() => {
         showMessage('Não foi possível agendar a sincronização dos eventos.', true);
       });
@@ -734,7 +885,7 @@
           lastError: ''
         });
         await render();
-        await syncQueue(true);
+        await syncQueue();
       } catch (error) {
         showMessage(error.message || 'Não foi possível tentar novamente.', true);
       }
@@ -841,16 +992,8 @@
           showMessage('Informe o nome deste aparelho para identificar os eventos.', true);
           return;
         }
-        saveConfig();
-        const existingEvents = await Store.all();
-        const lastCreatedAt = existingEvents.reduce(
-          (latest, item) => Math.max(latest, Number(item.createdAt) || 0),
-          0
-        );
-        const createdAt = Math.max(Date.now(), lastCreatedAt + 1);
-        const record = {
-          event_id: newEventId(),
-          ts_aparelho: localIsoTimestamp(now),
+        if (!saveConfig()) return;
+        await createLocalEvent({
           pedido: elements.order.value.trim(),
           doca: elements.dock.value,
           categoria: elements.category.value,
@@ -861,21 +1004,11 @@
           detalhe: elements.detail.value.trim(),
           fonte: elements.source.value,
           aparelho_id: deviceName,
-          offline: !navigator.onLine,
-          ref_event_id: '',
-          status: 'pendente',
-          attempts: 0,
-          lastError: '',
-          createdAt,
-          nextAttemptAt: 0
-        };
-
-        const added = await Store.add(record);
-        if (!added) throw new Error('Este identificador já existe no armazenamento local.');
+          ref_event_id: ''
+        }, now);
         elements.detail.value = '';
         showMessage('Evento salvo localmente. A sincronização foi iniciada.', false);
-        await render();
-        void syncQueue(false);
+        void syncQueue();
       } catch (error) {
         showMessage(error.message || 'Não foi possível salvar o evento localmente.', true);
       } finally {
@@ -883,10 +1016,94 @@
       }
     });
 
-    elements.syncButton.addEventListener('click', () => syncQueue(true));
+    elements.startForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      elements.startShiftButton.disabled = true;
+      elements.badgeNotice.textContent = '';
+      elements.deviceNameNotice.textContent = '';
+      try {
+        const now = new Date();
+        const cracha = elements.sessionBadge.value.trim();
+        const deviceName = (elements.deviceNameField.hidden
+          ? elements.deviceName.value.trim()
+          : elements.sessionDeviceName.value.trim());
+        if (!cracha) {
+          elements.badgeNotice.textContent = 'Informe o crachá para iniciar o turno.';
+          elements.sessionBadge.focus();
+          return;
+        }
+        if (!deviceName) {
+          elements.deviceNameNotice.textContent = 'Informe o nome deste aparelho.';
+          elements.sessionDeviceName.focus();
+          return;
+        }
+
+        elements.deviceName.value = deviceName;
+        if (!saveConfig()) return;
+        const record = await createLocalEvent({
+          atividade: 'SESSAO_INICIO',
+          cracha,
+          aparelho_id: deviceName,
+          fonte: 'toque'
+        }, now);
+        const previousSession = { ...sessionState };
+        sessionState.cracha = cracha;
+        sessionState.aparelho_id = deviceName;
+        sessionState.turno_ativo = true;
+        sessionState.ts_inicio = record.ts_aparelho;
+        if (!saveSession()) {
+          Object.assign(sessionState, previousSession);
+          return;
+        }
+        elements.sessionBadge.value = '';
+        elements.deviceNameField.hidden = true;
+        showSessionScreen();
+        void syncQueue();
+      } catch (error) {
+        showMessage(error.message || 'Não foi possível iniciar o turno.', true);
+      } finally {
+        elements.startShiftButton.disabled = false;
+      }
+    });
+
+    elements.changeOperator.addEventListener('click', event => {
+      event.preventDefault();
+      const previousSession = { ...sessionState };
+      sessionState.cracha = '';
+      sessionState.turno_ativo = false;
+      if (!saveSession()) {
+        Object.assign(sessionState, previousSession);
+        return;
+      }
+      elements.sessionBadge.value = '';
+      elements.deviceNameField.hidden = true;
+      showSessionScreen();
+    });
+
+    elements.diagnosticBackButton.addEventListener('click', showSessionScreen);
+
+    elements.syncButton.addEventListener('click', () => syncQueue());
     document.getElementById('export-csv').addEventListener('click', exportCsv);
     document.getElementById('copy-json').addEventListener('click', copyJson);
     elements.retryLastSentButton.addEventListener('click', resendLastSentEvent);
+
+    let titleTapCount = 0;
+    let titleTapTimer = null;
+    elements.appTitle.addEventListener('click', () => {
+      if (titleTapCount === 0) {
+        titleTapTimer = setTimeout(() => {
+          titleTapCount = 0;
+          titleTapTimer = null;
+        }, 3000);
+      }
+      titleTapCount += 1;
+      if (titleTapCount >= 5) {
+        clearTimeout(titleTapTimer);
+        titleTapTimer = null;
+        titleTapCount = 0;
+        showScreen('diagnostic');
+      }
+    });
 
     let syncHeadingTapCount = 0;
     elements.exportHeading.addEventListener('click', () => {
@@ -898,28 +1115,47 @@
 
     window.addEventListener('online', () => {
       showNetworkNotice('');
-      void syncQueue(false);
+      void syncQueue();
     });
     window.addEventListener('offline', () => {
       showNetworkNotice('Sem conexão. Os eventos permanecem salvos neste aparelho.');
     });
 
+    async function registerOfflineSupport() {
+      if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+      try {
+        await navigator.serviceWorker.register('./sw.js', { scope: './' });
+        await navigator.serviceWorker.ready;
+        elements.offlineReady.hidden = false;
+      } catch (error) {
+        showMessage('Não foi possível preparar o modo offline neste aparelho.', true);
+      }
+    }
+
     async function startApp() {
       readConfig();
+      loadSession();
+      if (!elements.deviceName.value.trim() && sessionState.aparelho_id) {
+        elements.deviceName.value = sessionState.aparelho_id;
+      }
+      elements.sessionDeviceName.value = elements.deviceName.value.trim();
+      elements.deviceNameField.hidden = Boolean(elements.deviceName.value.trim());
+      showSessionScreen();
       populateConfiguredOptions(elements.dock, DOCAS);
       populateConfiguredOptions(elements.category, CATEGORIAS);
+      void registerOfflineSupport();
       await initializeStorage();
       try {
         await render();
         if (!navigator.onLine) {
           showNetworkNotice('Sem conexão. Os eventos permanecem salvos neste aparelho.');
         } else {
-          void syncQueue(false);
+          void syncQueue();
         }
       } catch (error) {
         showMessage(error.message || 'Falha ao carregar os eventos locais.', true);
       }
-      setInterval(() => syncQueue(false), 30000);
+      setInterval(() => syncQueue(true), 30000);
       scheduleRetry();
     }
 
